@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"runtime"
 	"sync"
@@ -386,6 +388,36 @@ func TestFormatURLPath(t *testing.T) {
 		stripe.FormatURLPath("/v1/resources/%s", "%"))
 }
 
+func TestGetBackendWithConfig_Loggers(t *testing.T) {
+	leveledLogger := &stripe.LeveledLogger{}
+	logger := log.New(os.Stdout, "", 0)
+
+	// Prefers a LeveledLogger
+	{
+		backend := stripe.GetBackendWithConfig(
+			stripe.APIBackend,
+			&stripe.BackendConfig{
+				LeveledLogger: leveledLogger,
+				Logger:        logger,
+			},
+		).(*stripe.BackendImplementation)
+
+		assert.Equal(t, leveledLogger, backend.LeveledLogger)
+	}
+
+	// Falls back to Logger
+	{
+		backend := stripe.GetBackendWithConfig(
+			stripe.APIBackend,
+			&stripe.BackendConfig{
+				Logger: logger,
+			},
+		).(*stripe.BackendImplementation)
+
+		assert.NotNil(t, backend.LeveledLogger)
+	}
+}
+
 func TestGetBackendWithConfig_TrimV1Suffix(t *testing.T) {
 	{
 		backend := stripe.GetBackendWithConfig(
@@ -493,6 +525,51 @@ func TestStripeAccount(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, TestMerchantID, req.Header.Get("Stripe-Account"))
+}
+
+func TestUnmarshalJSONVerbose(t *testing.T) {
+	type testServerResponse struct {
+		Message string `json:"message"`
+	}
+
+	backend := stripe.GetBackend(stripe.APIBackend).(*stripe.BackendImplementation)
+
+	// Valid JSON
+	{
+		type testServerResponse struct {
+			Message string `json:"message"`
+		}
+
+		var sample testServerResponse
+		err := backend.UnmarshalJSONVerbose(200, []byte(`{"message":"hello"}`), &sample)
+		assert.NoError(t, err)
+		assert.Equal(t, "hello", sample.Message)
+	}
+
+	// Invalid JSON (short)
+	{
+		body := `server error`
+
+		var sample testServerResponse
+		err := backend.UnmarshalJSONVerbose(200, []byte(body), &sample)
+		assert.Regexp(t,
+			fmt.Sprintf(`^Couldn't deserialize JSON \(response status: 200, body sample: '%s'\): invalid character`, body),
+			err)
+	}
+
+	// Invalid JSON (long, and therefore truncated)
+	{
+		// Assembles a body that's at least as long as our maximum sample.
+		// body is ~130 characters * 5.
+		bodyText := `this is a really long body that will be truncated when added to the error message to protect against dumping huge responses in logs `
+		body := bodyText + bodyText + bodyText + bodyText + bodyText
+
+		var sample testServerResponse
+		err := backend.UnmarshalJSONVerbose(200, []byte(body), &sample)
+		assert.Regexp(t,
+			fmt.Sprintf(`^Couldn't deserialize JSON \(response status: 200, body sample: '%s ...'\): invalid character`, body[0:500]),
+			err)
+	}
 }
 
 func TestUserAgent(t *testing.T) {
@@ -637,8 +714,8 @@ func TestResponseToError(t *testing.T) {
 	err = json.Unmarshal(bytes, &raw)
 	assert.NoError(t, err)
 
-	expectedDeclineCode := "decline-code"
-	raw["decline_code"] = expectedDeclineCode
+	expectedDeclineCode := stripe.DeclineCodeInvalidCVC
+	raw["decline_code"] = string(expectedDeclineCode)
 	bytes, err = json.Marshal(raw)
 	assert.NoError(t, err)
 
@@ -665,6 +742,51 @@ func TestResponseToError(t *testing.T) {
 	cardErr, ok := stripeErr.Err.(*stripe.CardError)
 	assert.True(t, ok)
 	assert.Equal(t, expectedDeclineCode, cardErr.DeclineCode)
+}
+
+func TestStringSlice(t *testing.T) {
+	input := []string{"a", "b", "c"}
+	result := stripe.StringSlice(input)
+
+	assert.Equal(t, "a", *result[0])
+	assert.Equal(t, "b", *result[1])
+	assert.Equal(t, "c", *result[2])
+
+	assert.Equal(t, 0, len(stripe.StringSlice(nil)))
+}
+
+func TestInt64Slice(t *testing.T) {
+	input := []int64{8, 7, 6}
+	result := stripe.Int64Slice(input)
+
+	assert.Equal(t, int64(8), *result[0])
+	assert.Equal(t, int64(7), *result[1])
+	assert.Equal(t, int64(6), *result[2])
+
+	assert.Equal(t, 0, len(stripe.Int64Slice(nil)))
+}
+
+func TestFloat64Slice(t *testing.T) {
+	input := []float64{8, 7, 6}
+	result := stripe.Float64Slice(input)
+
+	assert.Equal(t, float64(8), *result[0])
+	assert.Equal(t, float64(7), *result[1])
+	assert.Equal(t, float64(6), *result[2])
+
+	assert.Equal(t, 0, len(stripe.Float64Slice(nil)))
+}
+
+func TestBoolSlice(t *testing.T) {
+	input := []bool{true, false, true, false}
+	result := stripe.BoolSlice(input)
+
+	assert.Equal(t, true, *result[0])
+	assert.Equal(t, false, *result[1])
+	assert.Equal(t, true, *result[2])
+	assert.Equal(t, false, *result[3])
+
+	assert.Equal(t, 0, len(stripe.BoolSlice(nil)))
 }
 
 //

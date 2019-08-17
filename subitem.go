@@ -12,6 +12,11 @@ type SubscriptionItemParams struct {
 	ProrationDate     *int64                                   `form:"proration_date"`
 	Quantity          *int64                                   `form:"quantity"`
 	Subscription      *string                                  `form:"subscription"`
+	TaxRates          []*string                                `form:"tax_rates"`
+
+	// The following parameters are only supported on updates
+	OffSession      *bool   `form:"off_session"`
+	PaymentBehavior *string `form:"payment_behavior"`
 }
 
 // SubscriptionItemBillingThresholdsParams is a structure representing the parameters allowed to
@@ -38,6 +43,7 @@ type SubscriptionItem struct {
 	Plan              *Plan                             `json:"plan"`
 	Quantity          int64                             `json:"quantity"`
 	Subscription      string                            `json:"subscription"`
+	TaxRates          []*TaxRate                        `json:"tax_rates"`
 }
 
 // SubscriptionItemBillingThresholds is a structure representing the billing thresholds for a

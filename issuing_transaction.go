@@ -25,6 +25,7 @@ type IssuingTransactionListParams struct {
 	Cardholder   *string           `form:"cardholder"`
 	Created      *int64            `form:"created"`
 	CreatedRange *RangeQueryParams `form:"created"`
+	Dispute      *string           `form:"dispute"`
 }
 
 // IssuingTransaction is the resource representing a Stripe issuing transaction.
@@ -40,6 +41,8 @@ type IssuingTransaction struct {
 	ID                 string                 `json:"id"`
 	Livemode           bool                   `json:"livemode"`
 	MerchantData       *IssuingMerchantData   `json:"merchant_data"`
+	MerchantAmount     int64                  `json:"merchant_amount"`
+	MerchantCurrency   Currency               `json:"merchant_currency"`
 	Metadata           map[string]string      `json:"metadata"`
 	Object             string                 `json:"object"`
 	Type               IssuingTransactionType `json:"type"`

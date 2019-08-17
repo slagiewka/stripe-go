@@ -17,14 +17,17 @@ func TestPaymentIntentCancel(t *testing.T) {
 }
 
 func TestPaymentIntentCapture(t *testing.T) {
-	intent, err := Capture("pi_123", nil)
+	intent, err := Capture("pi_123", &stripe.PaymentIntentCaptureParams{
+		AmountToCapture: stripe.Int64(123),
+	})
 	assert.Nil(t, err)
 	assert.NotNil(t, intent)
 }
 
 func TestPaymentIntentConfirm(t *testing.T) {
 	intent, err := Confirm("pi_123", &stripe.PaymentIntentConfirmParams{
-		ReturnURL: stripe.String("https://stripe.com/return"),
+		ReturnURL:  stripe.String("https://stripe.com/return"),
+		OffSession: stripe.Bool(true),
 	})
 	assert.Nil(t, err)
 	assert.NotNil(t, intent)
@@ -49,16 +52,16 @@ func TestPaymentIntentNew(t *testing.T) {
 	intent, err := New(&stripe.PaymentIntentParams{
 		Amount:   stripe.Int64(123),
 		Currency: stripe.String(string(stripe.CurrencyUSD)),
-		PaymentMethodTypes: []*string{
-			stripe.String("card"),
-		},
+		PaymentMethodTypes: stripe.StringSlice([]string{
+			"card",
+		}),
 	})
 	assert.Nil(t, err)
 	assert.NotNil(t, intent)
 }
 
 func TestPaymentIntentUpdate(t *testing.T) {
-	intent, err := Update("tr_123", &stripe.PaymentIntentParams{
+	intent, err := Update("pi_123", &stripe.PaymentIntentParams{
 		Params: stripe.Params{
 			Metadata: map[string]string{
 				"foo": "bar",
